@@ -86,10 +86,10 @@
         .editor-body[contenteditable]:empty::before { content: attr(data-placeholder); color: #555; pointer-events: none; display: block; }
         .editor-body a { color: var(--accent); text-decoration: none; cursor: pointer; }
         .editor-body a:hover { text-decoration: underline; }
-        .editor-body iframe, .editor-body video { max-width: 100%; border-radius: 8px; margin: 16px 0; background: #000; display: block; border: 1px solid var(--border); }
+        .editor-body iframe { max-width: 100%; border-radius: 8px; margin: 16px 0; background: #000; display: block; border: 1px solid var(--border); }
 
-        /* --- SERBEST SÜRÜKLENEBİLİR & BOYUTLANDIRILABİLİR FOTOĞRAF --- */
-        .resizable-image-container {
+        /* --- SERBEST SÜRÜKLENEBİLİR & BOYUTLANDIRILABİLİR MEDYA (FOTOĞRAF & VİDEO) --- */
+        .resizable-image-container, .resizable-video-container {
             position: absolute;
             left: 20px;
             top: 100px;
@@ -98,10 +98,10 @@
             user-select: none;
             z-index: 10;
         }
-        .resizable-image-container:active {
+        .resizable-image-container:active, .resizable-video-container:active {
             cursor: grabbing;
         }
-        .resizable-image-container img {
+        .resizable-image-container img, .resizable-video-container video {
             display: block;
             width: 300px;
             height: auto;
@@ -109,7 +109,15 @@
             border: 1px solid var(--border);
             pointer-events: none;
         }
-        .resizable-image-container.selected {
+        /* Seçili değilse video kontrolleri tıklanabilir olsun, seçiliyken container üzerinden rahatça sürüklensin */
+        .resizable-video-container video {
+            pointer-events: auto;
+            background: #000;
+        }
+        .resizable-video-container.selected video {
+            pointer-events: none; /* Seçildiğinde videonun üstüne tıklamak yerine direkt konteynırdan tutup sürüklemeyi sağlar */
+        }
+        .resizable-image-container.selected, .resizable-video-container.selected {
             outline: 2px solid var(--accent);
             z-index: 100;
         }
@@ -124,7 +132,8 @@
             z-index: 15;
             pointer-events: auto;
         }
-        .resizable-image-container.selected .resize-handle {
+        .resizable-image-container.selected .resize-handle, 
+        .resizable-video-container.selected .resize-handle {
             display: block;
         }
         .handle-se { bottom: -5px; right: -5px; cursor: se-resize; }
@@ -132,7 +141,7 @@
         .handle-ne { top: -5px; right: -5px; cursor: ne-resize; }
         .handle-nw { top: -5px; left: -5px; cursor: nw-resize; }
 
-        .img-toolbar {
+        .img-toolbar, .video-toolbar {
             position: absolute;
             top: -45px;
             left: 50%;
@@ -148,10 +157,11 @@
             white-space: nowrap;
             pointer-events: auto;
         }
-        .resizable-image-container.selected .img-toolbar {
+        .resizable-image-container.selected .img-toolbar,
+        .resizable-video-container.selected .video-toolbar {
             display: flex;
         }
-        .img-tool-btn {
+        .img-tool-btn, .video-tool-btn {
             background: transparent;
             border: none;
             color: #ccc;
@@ -160,7 +170,7 @@
             font-size: 12px;
             border-radius: 4px;
         }
-        .img-tool-btn:hover { background: #444; color: #fff; }
+        .img-tool-btn:hover, .video-tool-btn:hover { background: #444; color: #fff; }
 
         /* Araç Çubuğu */
         .floating-toolbar { position: absolute; display: none; background: #2a2a2a; border: 1px solid #444; border-radius: 12px; padding: 6px 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.4); z-index: 1000; align-items: center; gap: 8px; transform: translateY(-10px) translateX(-50%); transition: opacity 0.2s ease; }
@@ -247,6 +257,10 @@
             <button class="toolbar-btn" onclick="triggerLinkModal()" title="Add Link">🔗</button>
             <button class="toolbar-btn" onclick="triggerImageUpload()" title="Insert Image">🖼️</button>
             <input type="file" id="imageUploadInput" accept="image/*" style="display: none;" onchange="handleImageFileSelected(this)">
+            
+            <button class="toolbar-btn" onclick="triggerVideoUpload()" title="Insert Video">📹</button>
+            <input type="file" id="videoUploadInput" accept="video/mp4,video/webm,video/ogg,video/mov,video/avi" style="display: none;" onchange="handleVideoFileSelected(this)">
+
             <button class="toolbar-btn" onclick="formatText('insertUnorderedList')" title="Bullet List">📋</button>
             <div class="toolbar-divider"></div>
             <button class="toolbar-btn" id="alignBtn" onclick="toggleAlign()" title="Toggle Alignment">⫷</button>
@@ -475,7 +489,7 @@
         function toggleAlign() { restoreSelection(); document.execCommand(alignCommands[alignState], false, null); document.getElementById('alignBtn').textContent = alignIcons[alignState]; alignState = (alignState + 1) % alignCommands.length; editorBodyEl.focus(); }
         function triggerLinkModal() { restoreSelection(); showModal({ title: 'Add Link', inputType: 'url', inputPlaceholder: 'https://...', confirmText: 'Add Link', onConfirm: (url) => { if (url) { restoreSelection(); document.execCommand('createLink', false, url); editorBodyEl.focus(); } } }); }
 
-        // --- IMAGE HANDLING & FREE DRAGGING / RESIZING ---
+        // --- IMAGE & VIDEO HANDLING & FREE DRAGGING / RESIZING ---
         function triggerImageUpload() {
             restoreSelection();
             document.getElementById('imageUploadInput').click();
@@ -486,24 +500,44 @@
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
-                insertResizableImage(e.target.result);
+                insertResizableMedia(e.target.result, 'image');
             };
             reader.readAsDataURL(file);
             input.value = '';
         }
 
-        function insertResizableImage(src) {
+        function triggerVideoUpload() {
+            restoreSelection();
+            document.getElementById('videoUploadInput').click();
+        }
+
+        function handleVideoFileSelected(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                insertResizableMedia(e.target.result, 'video');
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
+        }
+
+        function insertResizableMedia(src, type, posX = 40, posY = 40) {
+            const isVideo = type === 'video';
+            const containerClass = isVideo ? 'resizable-video-container' : 'resizable-image-container';
+            const contentTag = isVideo ? `<video src="${src}" controls></video>` : `<img src="${src}">`;
+            
             const containerHtml = `
-                <div class="resizable-image-container" contenteditable="false" style="left: 40px; top: 40px;">
-                    <div class="img-toolbar">
-                        <button class="img-tool-btn" onclick="resizeSelectedImage(0.5)">50%</button>
-                        <button class="img-tool-btn" onclick="resizeSelectedImage(1)">100%</button>
-                        <button class="img-tool-btn" onclick="alignSelectedImage('left')">Left</button>
-                        <button class="img-tool-btn" onclick="alignSelectedImage('center')">Center</button>
-                        <button class="img-tool-btn" onclick="alignSelectedImage('right')">Right</button>
-                        <button class="img-tool-btn" style="color:#ff5555;" onclick="removeSelectedImage()">✕</button>
+                <div class="${containerClass}" contenteditable="false" style="left: ${posX}px; top: ${posY}px;">
+                    <div class="${isVideo ? 'video-toolbar' : 'img-toolbar'}">
+                        <button class="${isVideo ? 'video-tool-btn' : 'img-tool-btn'}" onclick="resizeSelectedMedia(0.5)">50%</button>
+                        <button class="${isVideo ? 'video-tool-btn' : 'img-tool-btn'}" onclick="resizeSelectedMedia(1)">100%</button>
+                        <button class="${isVideo ? 'video-tool-btn' : 'img-tool-btn'}" onclick="alignSelectedMedia('left')">Left</button>
+                        <button class="${isVideo ? 'video-tool-btn' : 'img-tool-btn'}" onclick="alignSelectedMedia('center')">Center</button>
+                        <button class="${isVideo ? 'video-tool-btn' : 'img-tool-btn'}" onclick="alignSelectedMedia('right')">Right</button>
+                        <button class="${isVideo ? 'video-tool-btn' : 'img-tool-btn'}" style="color:#ff5555;" onclick="removeSelectedMedia()">✕</button>
                     </div>
-                    <img src="${src}">
+                    ${contentTag}
                     <div class="resize-handle handle-nw"></div>
                     <div class="resize-handle handle-ne"></div>
                     <div class="resize-handle handle-sw"></div>
@@ -515,17 +549,17 @@
             handleInput();
         }
 
-        let selectedImgContainer = null;
+        let selectedMediaContainer = null;
 
         editorBodyEl.addEventListener('click', (e) => {
-            const container = e.target.closest('.resizable-image-container');
-            document.querySelectorAll('.resizable-image-container').forEach(c => c.classList.remove('selected'));
+            const container = e.target.closest('.resizable-image-container, .resizable-video-container');
+            document.querySelectorAll('.resizable-image-container, .resizable-video-container').forEach(c => c.classList.remove('selected'));
             if (container) {
                 container.classList.add('selected');
-                selectedImgContainer = container;
+                selectedMediaContainer = container;
                 e.stopPropagation();
             } else {
-                selectedImgContainer = null;
+                selectedMediaContainer = null;
             }
 
             if (e.target.tagName === 'A') {
@@ -534,7 +568,35 @@
             }
         });
 
-        // Free Drag & Resize Interaction
+        // --- DRAG AND DROP / PASTE OVERRIDES FOR LOCAL FILES ---
+        editorBodyEl.addEventListener('dragover', (e) => {
+            e.preventDefault();
+        });
+
+        editorBodyEl.addEventListener('drop', (e) => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            if (!files || files.length === 0) return;
+
+            const rect = editorBodyEl.getBoundingClientRect();
+            const dropX = e.clientX - rect.left;
+            const dropY = e.clientY - rect.top + editorBodyEl.scrollTop;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (file.type.startsWith('image/')) {
+                        insertResizableMedia(event.target.result, 'image', dropX, dropY);
+                    } else if (file.type.startsWith('video/')) {
+                        insertResizableMedia(event.target.result, 'video', dropX, dropY);
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Free Drag & Resize Interaction for Both Images and Videos
         let isDragging = false;
         let isResizing = false;
         let currentHandle = null;
@@ -544,52 +606,56 @@
             if (e.target.classList.contains('resize-handle')) {
                 isResizing = true;
                 currentHandle = e.target;
-                selectedImgContainer = currentHandle.closest('.resizable-image-container');
-                const img = selectedImgContainer.querySelector('img');
+                selectedMediaContainer = currentHandle.closest('.resizable-image-container, .resizable-video-container');
+                const mediaElement = selectedMediaContainer.querySelector('img, video');
                 startX = e.clientX;
-                startWidth = img.offsetWidth;
+                startWidth = mediaElement.offsetWidth;
                 e.preventDefault();
             } else {
-                const container = e.target.closest('.resizable-image-container');
-                if (container && !e.target.classList.contains('img-tool-btn') && !e.target.closest('.img-toolbar')) {
+                const container = e.target.closest('.resizable-image-container, .resizable-video-container');
+                if (container && !e.target.classList.contains('img-tool-btn') && !e.target.classList.contains('video-tool-btn') && !e.target.closest('.img-toolbar, .video-toolbar')) {
+                    // Video player kontrollerine tıklandığında sürükleme başlamasın, sadece boşluktan veya seçiliyken sürüklensin
+                    if (e.target.tagName === 'VIDEO' && !container.classList.contains('selected')) {
+                        return; // İlk tıklamada videoyu seç ve oynatıcısına izin ver, ikinci tıklamada/sürüklemede taşınsın
+                    }
+
                     isDragging = true;
-                    selectedImgContainer = container;
-                    document.querySelectorAll('.resizable-image-container').forEach(c => c.classList.remove('selected'));
-                    selectedImgContainer.classList.add('selected');
+                    selectedMediaContainer = container;
+                    document.querySelectorAll('.resizable-image-container, .resizable-video-container').forEach(c => c.classList.remove('selected'));
+                    selectedMediaContainer.classList.add('selected');
                     
                     startX = e.clientX;
                     startY = e.clientY;
-                    startLeft = selectedImgContainer.offsetLeft;
-                    startTop = selectedImgContainer.offsetTop;
+                    startLeft = selectedMediaContainer.offsetLeft;
+                    startTop = selectedMediaContainer.offsetTop;
                     e.preventDefault();
                 }
             }
         });
 
         document.addEventListener('mousemove', (e) => {
-            if (isDragging && selectedImgContainer) {
+            if (isDragging && selectedMediaContainer) {
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
                 let newLeft = startLeft + dx;
                 let newTop = startTop + dy;
 
-                // Sınırları koru (editör dışına çıkmasın)
-                const maxLeft = editorBodyEl.clientWidth - selectedImgContainer.offsetWidth;
+                const maxLeft = editorBodyEl.clientWidth - selectedMediaContainer.offsetWidth;
                 if (newLeft < 0) newLeft = 0;
                 if (newLeft > maxLeft) newLeft = maxLeft;
                 if (newTop < 0) newTop = 0;
 
-                selectedImgContainer.style.left = newLeft + 'px';
-                selectedImgContainer.style.top = newTop + 'px';
-            } else if (isResizing && selectedImgContainer) {
-                const img = selectedImgContainer.querySelector('img');
+                selectedMediaContainer.style.left = newLeft + 'px';
+                selectedMediaContainer.style.top = newTop + 'px';
+            } else if (isResizing && selectedMediaContainer) {
+                const mediaElement = selectedMediaContainer.querySelector('img, video');
                 const dx = e.clientX - startX;
                 let newWidth = currentHandle.classList.contains('handle-se') || currentHandle.classList.contains('handle-ne') 
                     ? startWidth + dx 
                     : startWidth - dx;
 
                 if (newWidth > 50 && newWidth <= editorBodyEl.clientWidth) {
-                    img.style.width = newWidth + 'px';
+                    mediaElement.style.width = newWidth + 'px';
                 }
             }
         });
@@ -602,34 +668,34 @@
             }
         });
 
-        function resizeSelectedImage(ratio) {
-            if (!selectedImgContainer) return;
-            const img = selectedImgContainer.querySelector('img');
-            img.style.width = Math.min(editorBodyEl.clientWidth, editorBodyEl.clientWidth * ratio) + 'px';
+        function resizeSelectedMedia(ratio) {
+            if (!selectedMediaContainer) return;
+            const mediaElement = selectedMediaContainer.querySelector('img, video');
+            mediaElement.style.width = Math.min(editorBodyEl.clientWidth, editorBodyEl.clientWidth * ratio) + 'px';
             handleInput();
         }
 
-        function alignSelectedImage(alignment) {
-            if (!selectedImgContainer) return;
-            const img = selectedImgContainer.querySelector('img');
-            const currentImgWidth = img.offsetWidth;
+        function alignSelectedMedia(alignment) {
+            if (!selectedMediaContainer) return;
+            const mediaElement = selectedMediaContainer.querySelector('img, video');
+            const currentMediaWidth = mediaElement.offsetWidth;
 
             if (alignment === 'left') {
-                selectedImgContainer.style.left = '0px';
+                selectedMediaContainer.style.left = '0px';
             } else if (alignment === 'center') {
-                const centerPos = (editorBodyEl.clientWidth - currentImgWidth) / 2;
-                selectedImgContainer.style.left = Math.max(0, centerPos) + 'px';
+                const centerPos = (editorBodyEl.clientWidth - currentMediaWidth) / 2;
+                selectedMediaContainer.style.left = Math.max(0, centerPos) + 'px';
             } else if (alignment === 'right') {
-                const rightPos = editorBodyEl.clientWidth - currentImgWidth;
-                selectedImgContainer.style.left = Math.max(0, rightPos) + 'px';
+                const rightPos = editorBodyEl.clientWidth - currentMediaWidth;
+                selectedMediaContainer.style.left = Math.max(0, rightPos) + 'px';
             }
             handleInput();
         }
 
-        function removeSelectedImage() {
-            if (!selectedImgContainer) return;
-            selectedImgContainer.remove();
-            selectedImgContainer = null;
+        function removeSelectedMedia() {
+            if (!selectedMediaContainer) return;
+            selectedMediaContainer.remove();
+            selectedMediaContainer = null;
             handleInput();
         }
 
@@ -641,7 +707,16 @@
                     const blob = items[i].getAsFile();
                     const reader = new FileReader();
                     reader.onload = (event) => {
-                        insertResizableImage(event.target.result);
+                        insertResizableMedia(event.target.result, 'image');
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                } else if (items[i].type.indexOf('video') !== -1) {
+                    e.preventDefault();
+                    const blob = items[i].getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        insertResizableMedia(event.target.result, 'video');
                     };
                     reader.readAsDataURL(blob);
                     return;
@@ -651,11 +726,9 @@
             const text = (e.clipboardData || window.clipboardData).getData('text');
             const ytMatch = text.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
             const vimeoMatch = text.match(/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/);
-            const videoMatch = text.match(/https?:\/\/.*\.(?:mp4|webm|ogg|mov|avi)/i);
             let embedHtml = "";
             if (ytMatch) { e.preventDefault(); embedHtml = `&nbsp;<div contenteditable="false" style="display:inline-block;"><iframe width="560" height="315" src="https://www.youtube.com/embed/${ytMatch[1]}" frameborder="0" allowfullscreen></iframe></div>&nbsp;`; } 
             else if (vimeoMatch) { e.preventDefault(); embedHtml = `&nbsp;<div contenteditable="false" style="display:inline-block;"><iframe src="https://player.vimeo.com/video/${vimeoMatch[1]}" width="560" height="315" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe></div>&nbsp;`; } 
-            else if (videoMatch) { e.preventDefault(); embedHtml = `&nbsp;<div contenteditable="false" style="display:inline-block;"><video width="560" controls src="${videoMatch[0]}"></video></div>&nbsp;`; }
             if (embedHtml !== "") { document.execCommand('insertHTML', false, embedHtml); }
         });
 
