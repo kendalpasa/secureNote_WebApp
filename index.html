@@ -79,14 +79,88 @@
         .add-note-btn { margin: 16px; padding: 12px; background-color: transparent; color: var(--text-muted); border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.2s; }
         .add-note-btn:hover { color: var(--text-main); border-color: var(--text-muted); background-color: var(--hover); }
 
-        .editor-container { flex-grow: 1; display: flex; flex-direction: column; padding: 60px 15% 40px; overflow-y: auto; }
+        .editor-container { flex-grow: 1; display: flex; flex-direction: column; padding: 60px 15% 40px; overflow-y: auto; position: relative; }
         .editor-title { background: transparent; border: none; color: var(--text-main); font-size: 40px; font-weight: 700; outline: none; margin-bottom: 24px; width: 100%; }
         .editor-title::placeholder { color: #444; }
-        .editor-body { flex-grow: 1; font-size: 16px; line-height: 1.7; outline: none; min-height: 50vh; color: #d1d1d1; padding-bottom: 100px; }
+        .editor-body { flex-grow: 1; font-size: 16px; line-height: 1.7; outline: none; min-height: 50vh; color: #d1d1d1; padding-bottom: 100px; position: relative; }
         .editor-body[contenteditable]:empty::before { content: attr(data-placeholder); color: #555; pointer-events: none; display: block; }
         .editor-body a { color: var(--accent); text-decoration: none; cursor: pointer; }
         .editor-body a:hover { text-decoration: underline; }
         .editor-body iframe, .editor-body video { max-width: 100%; border-radius: 8px; margin: 16px 0; background: #000; display: block; border: 1px solid var(--border); }
+
+        /* --- SERBEST SÜRÜKLENEBİLİR & BOYUTLANDIRILABİLİR FOTOĞRAF --- */
+        .resizable-image-container {
+            position: absolute;
+            left: 20px;
+            top: 100px;
+            display: inline-block;
+            cursor: grab;
+            user-select: none;
+            z-index: 10;
+        }
+        .resizable-image-container:active {
+            cursor: grabbing;
+        }
+        .resizable-image-container img {
+            display: block;
+            width: 300px;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            pointer-events: none;
+        }
+        .resizable-image-container.selected {
+            outline: 2px solid var(--accent);
+            z-index: 100;
+        }
+        .resize-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border: 1px solid #fff;
+            border-radius: 50%;
+            display: none;
+            z-index: 15;
+            pointer-events: auto;
+        }
+        .resizable-image-container.selected .resize-handle {
+            display: block;
+        }
+        .handle-se { bottom: -5px; right: -5px; cursor: se-resize; }
+        .handle-sw { bottom: -5px; left: -5px; cursor: sw-resize; }
+        .handle-ne { top: -5px; right: -5px; cursor: ne-resize; }
+        .handle-nw { top: -5px; left: -5px; cursor: nw-resize; }
+
+        .img-toolbar {
+            position: absolute;
+            top: -45px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 4px 8px;
+            display: none;
+            gap: 6px;
+            z-index: 20;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            white-space: nowrap;
+            pointer-events: auto;
+        }
+        .resizable-image-container.selected .img-toolbar {
+            display: flex;
+        }
+        .img-tool-btn {
+            background: transparent;
+            border: none;
+            color: #ccc;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+        }
+        .img-tool-btn:hover { background: #444; color: #fff; }
 
         /* Araç Çubuğu */
         .floating-toolbar { position: absolute; display: none; background: #2a2a2a; border: 1px solid #444; border-radius: 12px; padding: 6px 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.4); z-index: 1000; align-items: center; gap: 8px; transform: translateY(-10px) translateX(-50%); transition: opacity 0.2s ease; }
@@ -171,6 +245,8 @@
             <div class="toolbar-divider"></div>
             <button class="toolbar-btn" onclick="formatText('bold')" title="Bold"><b>B</b></button>
             <button class="toolbar-btn" onclick="triggerLinkModal()" title="Add Link">🔗</button>
+            <button class="toolbar-btn" onclick="triggerImageUpload()" title="Insert Image">🖼️</button>
+            <input type="file" id="imageUploadInput" accept="image/*" style="display: none;" onchange="handleImageFileSelected(this)">
             <button class="toolbar-btn" onclick="formatText('insertUnorderedList')" title="Bullet List">📋</button>
             <div class="toolbar-divider"></div>
             <button class="toolbar-btn" id="alignBtn" onclick="toggleAlign()" title="Toggle Alignment">⫷</button>
@@ -286,7 +362,7 @@
                 if (authInput.value !== authInputConfirm.value) { alert("Passwords do not match!"); return; }
                 rawPassword = authInput.value;
                 unlockApp();
-                downloadBackupFile(); // İlk dosyayı indir
+                downloadBackupFile();
             };
         }
 
@@ -322,7 +398,6 @@
             initApp();
         }
 
-        // --- ÇIKIŞTA / MANUEL KAYDETME MANTIĞI ---
         async function downloadBackupFile() {
             if (!rawPassword) return;
             const encryptedString = await encryptData({ notes: notes }, rawPassword);
@@ -337,7 +412,6 @@
             URL.revokeObjectURL(url);
         }
 
-        // Sayfayı kapatırken veya sekmeden çıkarken otomatik kaydetme tetiklenir
         window.addEventListener('beforeunload', (e) => {
             downloadBackupFile();
         });
@@ -357,7 +431,6 @@
             });
         };
 
-        // --- UYGULAMA MANTIĞI ---
         let activeNoteId = null; let menuTargetNoteId = null; let savedRange = null; 
 
         const noteListEl = document.getElementById('noteList'); const editorTitleEl = document.getElementById('editorTitle'); const editorBodyEl = document.getElementById('editorBody'); const addNoteBtn = document.getElementById('addNoteBtn'); const floatingToolbar = document.getElementById('floatingToolbar'); const optionsMenu = document.getElementById('optionsMenu'); const pinMenuText = document.getElementById('pinMenuText');
@@ -402,8 +475,179 @@
         function toggleAlign() { restoreSelection(); document.execCommand(alignCommands[alignState], false, null); document.getElementById('alignBtn').textContent = alignIcons[alignState]; alignState = (alignState + 1) % alignCommands.length; editorBodyEl.focus(); }
         function triggerLinkModal() { restoreSelection(); showModal({ title: 'Add Link', inputType: 'url', inputPlaceholder: 'https://...', confirmText: 'Add Link', onConfirm: (url) => { if (url) { restoreSelection(); document.execCommand('createLink', false, url); editorBodyEl.focus(); } } }); }
 
-        editorBodyEl.addEventListener('click', (e) => { if (e.target.tagName === 'A') { e.preventDefault(); window.open(e.target.href, '_blank'); } });
+        // --- IMAGE HANDLING & FREE DRAGGING / RESIZING ---
+        function triggerImageUpload() {
+            restoreSelection();
+            document.getElementById('imageUploadInput').click();
+        }
+
+        function handleImageFileSelected(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                insertResizableImage(e.target.result);
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
+        }
+
+        function insertResizableImage(src) {
+            const containerHtml = `
+                <div class="resizable-image-container" contenteditable="false" style="left: 40px; top: 40px;">
+                    <div class="img-toolbar">
+                        <button class="img-tool-btn" onclick="resizeSelectedImage(0.5)">50%</button>
+                        <button class="img-tool-btn" onclick="resizeSelectedImage(1)">100%</button>
+                        <button class="img-tool-btn" onclick="alignSelectedImage('left')">Left</button>
+                        <button class="img-tool-btn" onclick="alignSelectedImage('center')">Center</button>
+                        <button class="img-tool-btn" onclick="alignSelectedImage('right')">Right</button>
+                        <button class="img-tool-btn" style="color:#ff5555;" onclick="removeSelectedImage()">✕</button>
+                    </div>
+                    <img src="${src}">
+                    <div class="resize-handle handle-nw"></div>
+                    <div class="resize-handle handle-ne"></div>
+                    <div class="resize-handle handle-sw"></div>
+                    <div class="resize-handle handle-se"></div>
+                </div>
+            `;
+            editorBodyEl.insertAdjacentHTML('beforeend', containerHtml);
+            editorBodyEl.focus();
+            handleInput();
+        }
+
+        let selectedImgContainer = null;
+
+        editorBodyEl.addEventListener('click', (e) => {
+            const container = e.target.closest('.resizable-image-container');
+            document.querySelectorAll('.resizable-image-container').forEach(c => c.classList.remove('selected'));
+            if (container) {
+                container.classList.add('selected');
+                selectedImgContainer = container;
+                e.stopPropagation();
+            } else {
+                selectedImgContainer = null;
+            }
+
+            if (e.target.tagName === 'A') {
+                e.preventDefault();
+                window.open(e.target.href, '_blank');
+            }
+        });
+
+        // Free Drag & Resize Interaction
+        let isDragging = false;
+        let isResizing = false;
+        let currentHandle = null;
+        let startX, startY, startLeft, startTop, startWidth;
+
+        document.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('resize-handle')) {
+                isResizing = true;
+                currentHandle = e.target;
+                selectedImgContainer = currentHandle.closest('.resizable-image-container');
+                const img = selectedImgContainer.querySelector('img');
+                startX = e.clientX;
+                startWidth = img.offsetWidth;
+                e.preventDefault();
+            } else {
+                const container = e.target.closest('.resizable-image-container');
+                if (container && !e.target.classList.contains('img-tool-btn') && !e.target.closest('.img-toolbar')) {
+                    isDragging = true;
+                    selectedImgContainer = container;
+                    document.querySelectorAll('.resizable-image-container').forEach(c => c.classList.remove('selected'));
+                    selectedImgContainer.classList.add('selected');
+                    
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startLeft = selectedImgContainer.offsetLeft;
+                    startTop = selectedImgContainer.offsetTop;
+                    e.preventDefault();
+                }
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging && selectedImgContainer) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                let newLeft = startLeft + dx;
+                let newTop = startTop + dy;
+
+                // Sınırları koru (editör dışına çıkmasın)
+                const maxLeft = editorBodyEl.clientWidth - selectedImgContainer.offsetWidth;
+                if (newLeft < 0) newLeft = 0;
+                if (newLeft > maxLeft) newLeft = maxLeft;
+                if (newTop < 0) newTop = 0;
+
+                selectedImgContainer.style.left = newLeft + 'px';
+                selectedImgContainer.style.top = newTop + 'px';
+            } else if (isResizing && selectedImgContainer) {
+                const img = selectedImgContainer.querySelector('img');
+                const dx = e.clientX - startX;
+                let newWidth = currentHandle.classList.contains('handle-se') || currentHandle.classList.contains('handle-ne') 
+                    ? startWidth + dx 
+                    : startWidth - dx;
+
+                if (newWidth > 50 && newWidth <= editorBodyEl.clientWidth) {
+                    img.style.width = newWidth + 'px';
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isDragging || isResizing) {
+                isDragging = false;
+                isResizing = false;
+                handleInput();
+            }
+        });
+
+        function resizeSelectedImage(ratio) {
+            if (!selectedImgContainer) return;
+            const img = selectedImgContainer.querySelector('img');
+            img.style.width = Math.min(editorBodyEl.clientWidth, editorBodyEl.clientWidth * ratio) + 'px';
+            handleInput();
+        }
+
+        function alignSelectedImage(alignment) {
+            if (!selectedImgContainer) return;
+            const img = selectedImgContainer.querySelector('img');
+            const currentImgWidth = img.offsetWidth;
+
+            if (alignment === 'left') {
+                selectedImgContainer.style.left = '0px';
+            } else if (alignment === 'center') {
+                const centerPos = (editorBodyEl.clientWidth - currentImgWidth) / 2;
+                selectedImgContainer.style.left = Math.max(0, centerPos) + 'px';
+            } else if (alignment === 'right') {
+                const rightPos = editorBodyEl.clientWidth - currentImgWidth;
+                selectedImgContainer.style.left = Math.max(0, rightPos) + 'px';
+            }
+            handleInput();
+        }
+
+        function removeSelectedImage() {
+            if (!selectedImgContainer) return;
+            selectedImgContainer.remove();
+            selectedImgContainer = null;
+            handleInput();
+        }
+
         editorBodyEl.addEventListener('paste', (e) => {
+            const items = (e.clipboardData || window.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    const blob = items[i].getAsFile();
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        insertResizableImage(event.target.result);
+                    };
+                    reader.readAsDataURL(blob);
+                    return;
+                }
+            }
+
             const text = (e.clipboardData || window.clipboardData).getData('text');
             const ytMatch = text.match(/(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
             const vimeoMatch = text.match(/(?:https?:\/\/)?(?:www\.)?vimeo\.com\/(\d+)/);
